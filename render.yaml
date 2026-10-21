@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: iraq-study-ai
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: OWNER_USERNAME
+        value: حسين العميدي
+      - key: GIGACHAT_SCOPE
+        value: GIGACHAT_API_PERS
+      - key: GIGACHAT_MODEL
+        value: GigaChat
+      - key: SESSION_SECRET
+        generateValue: true
