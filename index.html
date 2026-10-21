@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <title>iraq study .ai | مساعدك الدراسي</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="logo"><span class="mark">IS</span><div><strong>iraq study <i>.ai</i></strong><small>مساعدك الدراسي للمنهج العراقي</small></div></div>
+    <span class="status"><b></b> مساعدك جاهز</span>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="eyebrow">IRAQI CURRICULUM • AI STUDY ASSISTANT</div>
+      <h1>افهم السؤال،<br><span>مو بس تحفظ الجواب.</span></h1>
+      <p>حلول مشروحة وتلخيصات تساعدك بالدراسة. اكتب نص السؤال حتى تكون الإجابة أدق.</p>
+    </section>
+    <form id="studyForm" class="panel">
+      <div class="grid">
+        <label>الصف الدراسي
+          <select id="grade" required>
+            <option value="">اختَر الصف</option>
+            <option>الأول المتوسط</option><option>الثاني المتوسط</option><option>الثالث المتوسط</option>
+            <option>الرابع الإعدادي</option><option>الخامس الإعدادي</option><option>السادس الإعدادي</option>
+            <option>صف آخر</option>
+          </select>
+        </label>
+        <label>المادة
+          <select id="subject" required>
+            <option value="">اختَر المادة</option>
+            <option>اللغة العربية</option><option>اللغة الإنجليزية</option><option>الرياضيات</option>
+            <option>الفيزياء</option><option>الكيمياء</option><option>الأحياء</option>
+            <option>الاجتماعيات</option><option>التربية الإسلامية</option><option>مادة أخرى</option>
+          </select>
+        </label>
+        <label>رقم الصفحة (اختياري)<input id="page" inputmode="numeric" placeholder="مثلاً 42"></label>
+        <label>رقم السؤال (اختياري)<input id="questionNumber" placeholder="مثلاً س3 / ب"></label>
+      </div>
+      <div class="mode-row">
+        <label class="radio"><input type="radio" name="mode" value="solve" checked><span>حل نموذجي</span></label>
+        <label class="radio"><input type="radio" name="mode" value="summary"><span>تلخيص موضوع</span></label>
+      </div>
+      <label>نص السؤال أو اسم الموضوع
+        <textarea id="task" rows="5" required maxlength="12000" placeholder="اكتب السؤال كاملاً هنا، أو اكتب اسم الموضوع الذي تريد تلخيصه..."></textarea>
+      </label>
+      <p class="hint">مهم: رقم الصفحة والسؤال وحدهما ما يكفون إذا ما كان نص الكتاب متوفراً للنظام. اكتب نص السؤال حتى ما نخمنه.</p>
+      <button id="submitBtn" type="submit"><span>✦</span> ابدأ الحل</button>
+    </form>
+    <section id="result" class="result hidden" aria-live="polite">
+      <div class="result-head"><h2>الإجابة</h2><button type="button" id="copyBtn" class="copy">نسخ الإجابة</button></div>
+      <div id="answer" class="answer"></div>
+      <p class="disclaimer">راجع الإجابة مع كتابك المدرسي؛ الذكاء الاصطناعي قد يخطئ ولا يضمن صحة 100%.</p>
+    </section>
+    <footer>iraq study .ai <span>•</span> صُمّم لمساعدة الطالب على الفهم</footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
