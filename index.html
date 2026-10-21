@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080b12">
+  <meta name="description" content="iraq study .ai — مساعدك الدراسي للمنهج العراقي">
+  <title>iraq study .ai | مساعدك الدراسي</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="iraq study home"><span class="brand-mark">IS<span>✦</span></span><span class="brand-copy"><strong>iraq study <i>.ai</i></strong><small>مساعدك الدراسي للمنهج العراقي</small></span></a>
+    <div class="header-actions"><span class="live"><b></b> مساحة الدراسة</span><button class="btn btn-outline btn-small" id="authOpen">تسجيل الدخول</button><button class="avatar hidden" id="accountBadge" aria-label="الحساب">ح</button></div>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow"><span>✦</span> IRAQI CURRICULUM · SMART STUDY</div>
+      <h1>دراستك تصير <span class="gradient-text">أوضح.</span><br>خطوة بخطوة.</h1>
+      <p>حلول مشروحة وتلخيصات مرتبة تساعدك تفهم المنهج العراقي، مو بس تحفظ الإجابة.</p>
+      <div class="hero-pills"><span>✦ شرح تدريجي</span><span>▤ تلخيص منظم</span><span>◈ تجربة عربية</span></div>
+    </section>
+    <section class="premium-banner">
+      <div class="premium-icon">✦</div><div class="premium-copy"><span class="mini-label">STUDY MORE</span><h2>ارتقِ بتجربتك الدراسية</h2><p>تعرّف على مزايا Premium وتواصل معنا للحصول عليه.</p></div><button id="getPremium" class="btn btn-gold">Get Premium <span>↗</span></button>
+    </section>
+    <section class="workspace">
+      <div class="section-heading"><div><span class="section-kicker">YOUR STUDY SPACE</span><h2>شنو ندرس اليوم؟</h2></div><span class="step-chip"><b>01</b> ابدأ من هنا</span></div>
+      <form id="studyForm" class="study-card">
+        <div class="form-grid">
+          <label>الصف الدراسي<select id="grade" required><option value="">اختَر الصف</option><option>الأول المتوسط</option><option>الثاني المتوسط</option><option>الثالث المتوسط</option><option>الرابع الإعدادي</option><option>الخامس الإعدادي</option><option>السادس الإعدادي</option><option>صف آخر</option></select></label>
+          <label>المادة<select id="subject" required><option value="">اختَر المادة</option><option>اللغة العربية</option><option>اللغة الإنجليزية</option><option>الرياضيات</option><option>الفيزياء</option><option>الكيمياء</option><option>الأحياء</option><option>الاجتماعيات</option><option>التربية الإسلامية</option><option>مادة أخرى</option></select></label>
+          <label>رقم الصفحة <span class="optional">اختياري</span><input id="page" inputmode="numeric" placeholder="مثلاً 42"></label>
+          <label>رقم السؤال <span class="optional">اختياري</span><input id="questionNumber" placeholder="مثلاً س3 / ب"></label>
+        </div>
+        <div class="mode-label">اختَر نوع المساعدة</div>
+        <div class="mode-row"><label class="mode-option"><input type="radio" name="mode" value="solve" checked><span class="mode-symbol">✎</span><span><b>حل نموذجي</b><small>حل مع خطوات واضحة</small></span><span class="radio-dot"></span></label><label class="mode-option"><input type="radio" name="mode" value="summary"><span class="mode-symbol">▤</span><span><b>تلخيص موضوع</b><small>أهم الأفكار والتعاريف</small></span><span class="radio-dot"></span></label></div>
+        <label class="task-label">نص السؤال أو اسم الموضوع<textarea id="task" rows="4" required maxlength="12000" placeholder="اكتب نص السؤال كاملاً هنا، أو اكتب اسم الموضوع الذي تريد تلخيصه..."></textarea></label>
+        <div class="helper-note"><span>ⓘ</span><p>حتى تحصل على جواب أدق، اكتب نص السؤال. رقم الصفحة وحده لا يكفي إذا لم يكن نص الكتاب متوفراً.</p></div>
+        <button class="btn btn-primary submit-btn" id="submitBtn" type="submit"><span>✦</span> ابدأ الحل <b>←</b></button>
+      </form>
+      <section id="result" class="result-card hidden" aria-live="polite"><div class="result-top"><div><span class="section-kicker">YOUR ANSWER</span><h2>الإجابة</h2></div><button id="copyBtn" class="btn btn-outline btn-small" type="button">نسخ الإجابة</button></div><div id="answer" class="answer"></div><p class="disclaimer">راجع الإجابة مع كتابك المدرسي؛ قد يخطئ الذكاء الاصطناعي ولا يضمن صحة 100%.</p></section>
+    </section>
+    <section class="feature-grid"><article class="feature-card"><span class="feature-icon gold-icon">✦</span><div><h3>حل خطوة بخطوة</h3><p>رتّب الحل وافهم الطريقة قبل الجواب النهائي.</p></div><span class="feature-num">01</span></article><article class="feature-card"><span class="feature-icon blue-icon">▤</span><div><h3>ملخصات واضحة</h3><p>أفكار أساسية وتعريفات وقوانين بنقاط.</p></div><span class="feature-num">02</span></article><article class="feature-card"><span class="feature-icon purple-icon">♧</span><div><h3>حسابك الدراسي</h3><p>سجّل حسابك وتابع المزايا المتاحة لك.</p></div><span class="feature-num">03</span></article></section>
+    <footer><span class="footer-brand">iraq study <i>.ai</i></span><span>صُمّم حتى تكون الدراسة أسهل</span><button id="footerLogin" class="footer-link">دخول الـ Owner</button></footer>
+  </main>
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <div id="premiumModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="premiumTitle"><div class="modal-backdrop" data-close="premiumModal"></div><div class="modal-card premium-modal"><button class="close-btn" data-close="premiumModal" aria-label="إغلاق">×</button><div class="modal-emblem">✦</div><span class="section-kicker">PREMIUM ACCESS</span><h2 id="premiumTitle">خلّ دراستك أقوى</h2><p class="premium-message">يرجى التواصل مع <bdi>+79997006869</bdi> للحصول على البريميوم بشكل مجاني</p><a class="btn btn-gold full-btn" href="https://wa.me/79997006869" target="_blank" rel="noopener">التواصل عبر واتساب ↗</a><small class="modal-footnote">البريميوم يُفعّل من لوحة تحكم الـ Owner.</small></div></div>
+
+  <div id="authModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle"><div class="modal-backdrop" data-close="authModal"></div><div class="modal-card"><button class="close-btn" data-close="authModal" aria-label="إغلاق">×</button><span class="section-kicker">YOUR ACCOUNT</span><h2 id="authTitle">أهلاً بيك</h2><p class="modal-subtitle">سجّل دخولك أو أنشئ حساباً جديداً.</p><div class="auth-tabs"><button class="active" data-auth-mode="login">تسجيل الدخول</button><button data-auth-mode="register">إنشاء حساب</button></div><form id="authForm"><label>اسم المستخدم<input id="authUsername" required minlength="3" maxlength="30" autocomplete="username" placeholder="اكتب اسم المستخدم"></label><label>كلمة المرور<input id="authPassword" required minlength="8" maxlength="72" type="password" autocomplete="current-password" placeholder="8 أحرف أو أكثر"></label><button class="btn btn-primary full-btn" id="authSubmit" type="submit">تسجيل الدخول</button><p id="authError" class="form-error"></p></form></div></div>
+
+  <div id="accountModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><div class="modal-backdrop" data-close="accountModal"></div><div class="modal-card"><button class="close-btn" data-close="accountModal" aria-label="إغلاق">×</button><span class="section-kicker">ACCOUNT</span><h2 id="accountTitle">حسابك</h2><div id="accountDetails" class="account-details"></div><div id="ownerTools" class="hidden"><div class="owner-heading"><h3>لوحة الـ Owner</h3><span class="owner-tag">ADMIN</span></div><div class="stats-grid"><div><b id="statUsers">—</b><small>الحسابات</small></div><div><b id="statPremium">—</b><small>Premium</small></div><div><b id="statActivity">—</b><small>الأنشطة</small></div></div><div class="admin-section"><h4>منح أو سحب Premium</h4><form id="premiumForm"><label>اسم المستخدم<input id="premiumUsername" required placeholder="اسم حساب المستخدم"></label><label>المدة<select id="premiumDuration"><option value="1">يوم واحد</option><option value="7">7 أيام</option><option value="30" selected>30 يوماً</option><option value="90">90 يوماً</option><option value="365">سنة</option><option value="0">دائم</option></select></label><div class="admin-actions"><button class="btn btn-gold" type="submit">منح Premium</button><button class="btn btn-danger" type="button" id="revokePremium">سحب Premium</button></div><p id="premiumFeedback" class="form-error"></p></form></div><div class="admin-section"><h4>سجل النشاطات</h4><div id="activityList" class="activity-list">يتم تحميل السجل…</div></div><div class="admin-section"><h4>الحسابات</h4><div id="usersList" class="users-list">يتم تحميل الحسابات…</div></div></div><button id="logoutBtn" class="btn btn-outline full-btn">تسجيل الخروج</button></div></div>
+  <script src="./app.js" defer></script>
+</body></html>
