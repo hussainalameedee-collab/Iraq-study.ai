@@ -3,8 +3,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/((?!style\\.css|app\\.js|favicon\\.ico).*)",
+      "source": "/api/(.*)",
       "destination": "/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
