@@ -862,10 +862,10 @@ app.post('/api/solve', requireAuth, async (req, res, next) => {
 });
 
 // الصفحة الرئيسية والملفات الثابتة
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // التعامل مع الأخطاء
