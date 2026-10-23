@@ -1,31 +1,35 @@
-
 require('dotenv').config();
+
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const OWNER_USERNAME = process.env.OWNER_USERNAME || 'حسين العميدي';
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD;
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
-const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
+const SESSION_SECRET = process.env.SESSION_SECRET;
+
 const GIGACHAT_CREDENTIALS = process.env.GIGACHAT_CREDENTIALS;
-const GIGACHAT_SCOPE = process.env.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS';
+const GIGACHAT_SCOPE =
+  process.env.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS';
 const MODEL = process.env.GIGACHAT_MODEL || 'GigaChat';
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL =
+  (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 
 app.use(session({
   name: 'iraqstudy.sid',
-  secret: SESSION_SECRET,
+  secret: SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -36,170 +40,35 @@ app.use(session({
   }
 }));
 
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/index.html', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/style.css', (_req, res) => {
-  res.type('text/css');
-  res.sendFile(path.join(__dirname, 'style.css'));
-});
-app.get('/app.js', (_req, res) => {
-  res.type('application/javascript');
-  res.sendFile(path.join(__dirname, 'app.js'));
-});
-
-let db = { users: [], activity: [] };
-
-function loadDb() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      db = {
-        users: Array.isArray(parsed.users) ? parsed.users : [],
-        activity: Array.isArray(parsed.activity) ? parsed.activity : []
-      };
-    }
-  } catch (err) {
-    console.error('Could not read data file:', err.message);
-  }
-}
-
-function saveDb() {
-  try {
-    fs.mkdirSync(path.dirname(path.resolve(DATA_FILE)), { recursive: true });
-    const temp = `${DATA_FILE}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify(db, null, 2), { mode: 0o600 });
-    fs.renameSync(temp, DATA_FILE);
-  } catch (err) {
-    console.error('Could not save data file:', err.message);
-    throw new Error('تعذر حفظ البيانات على الخادم. تحقق من إعدادات التخزين.');
-  }
-}
-
-function logActivity(username, action, details = '') {
-  db.activity.unshift({
-    id: crypto.randomUUID(),
-    username,
-    action,
-    details,
-    createdAt: new Date().toISOString()
-  });
-  db.activity = db.activity.slice(0, 500);
-  try {
-    saveDb();
-  } catch (e) {
-    console.error(e.message);
-  }
-}
-
-function publicUser(user) {
-  const premiumActive = !!user &&
-    !!user.premium &&
-    (!user.premiumUntil || new Date(user.premiumUntil).getTime() > Date.now());
-
-  if (user?.role === 'owner') {
-    return {
-      username: OWNER_USERNAME,
-      role: 'owner',
-      premium: true,
-      premiumUntil: null
-    };
-  }
-
-  return {
-    username: user.username,
-    role: 'user',
-    premium: premiumActive,
-    premiumUntil: premiumActive ? user.premiumUntil : null
-  };
-}
-
-function currentUser(req) {
-  if (req.session?.user?.role === 'owner') {
-    return {
-      username: OWNER_USERNAME,
-      role: 'owner',
-      premium: true,
-      premiumUntil: null
-    };
-  }
-
-  if (!req.session?.user?.username) return null;
-
-  const user = db.users.find(
-    u => u.username.toLowerCase() === req.session.user.username.toLowerCase()
-  );
-
-  if (!user) return null;
-
-  if (
-    user.premium &&
-    user.premiumUntil &&
-    new Date(user.premiumUntil).getTime() <= Date.now()
-  ) {
-    user.premium = false;
-    user.premiumUntil = null;
-    try {
-      saveDb();
-    } catch {}
-  }
-
-  return publicUser(user);
-}
-
-function requireAuth(req, res, next) {
-  const user = currentUser(req);
-  if (!user) {
-    return res.status(401).json({ error: 'سجّل الدخول أولاً حتى تكمل.' });
-  }
-  req.user = user;
-  next();
-}
-
-function requireOwner(req, res, next) {
-  const user = currentUser(req);
-  if (!user || user.role !== 'owner') {
-    return res.status(403).json({ error: 'هذه الميزة مخصصة للـ Owner فقط.' });
-  }
-  req.user = user;
-  next();
-}
-
-function cleanUsername(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ');
-}
-
-function validUsername(name) {
-  return name.length >= 3 && name.length <= 30 && !/[<>]/.test(name);
-}
-
-/* Supabase REST helpers: the service-role key is used only on the server. */
 function requireSupabase() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    const err = new Error('إعدادات Supabase ناقصة في إعدادات الخادم.');
-    err.status = 503;
-    throw err;
+    const error = new Error(
+      'إعدادات Supabase ناقصة في إعدادات الخادم.'
+    );
+    error.status = 503;
+    throw error;
   }
 }
 
 async function supabaseRequest(table, query = '', options = {}) {
   requireSupabase();
 
+  const headers = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  };
+
+  if (options.returnRepresentation) {
+    headers.Prefer = 'return=representation';
+  }
+
   const response = await fetch(
     `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`,
     {
       method: options.method || 'GET',
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(options.returnRepresentation
-          ? { Prefer: 'return=representation' }
-          : {}),
-        ...(options.upsert
-          ? { Prefer: 'resolution=merge-duplicates,return=representation' }
-          : {})
-      },
+      headers,
       ...(options.body !== undefined
         ? { body: JSON.stringify(options.body) }
         : {})
@@ -216,414 +85,645 @@ async function supabaseRequest(table, query = '', options = {}) {
   }
 
   if (!response.ok) {
-    console.error('Supabase request failed:', response.status, data);
-    const err = new Error('تعذر الاتصال بقاعدة بيانات البريميوم.');
-    err.status = 502;
-    throw err;
+    console.error('Supabase error:', response.status, data);
+
+    const error = new Error(
+      'تعذر الاتصال بقاعدة بيانات Supabase.'
+    );
+    error.status = 502;
+    throw error;
   }
 
   return data;
 }
+// ===============================
+// الجزء 2: الحسابات والصلاحيات
+// ===============================
 
-/*
- * The existing login system uses data.json.
- * Before redeeming a code, make sure the matching account exists in
- * Supabase because premium_codes.used_by references public.users.id.
- */
-async function getOrCreateSupabaseUser(localUser) {
-  const usernameQuery = `username=eq.${encodeURIComponent(localUser.username)}&select=id,username&limit=1`;
+function normalizeUsername(username) {
+  return String(username || '').trim();
+}
 
-  const found = await supabaseRequest('users', usernameQuery);
+function publicUser(user) {
+  const premiumUntil = user.premium_until || null;
+  const isPermanent = Boolean(user.premium) && !premiumUntil;
 
-  if (Array.isArray(found) && found.length) {
-    return found[0];
-  }
+  const premiumActive =
+    Boolean(user.premium) &&
+    (isPermanent || new Date(premiumUntil).getTime() > Date.now());
 
-  const id = localUser.id || crypto.randomUUID();
+  return {
+    id: user.id || null,
+    username: user.username,
+    role: user.role || 'user',
+    premium: premiumActive,
+    premiumUntil: premiumActive ? premiumUntil : null,
+    createdAt: user.created_at || null
+  };
+}
 
+async function findUserByUsername(username) {
+  const query =
+    `username=ilike.${encodeURIComponent(username)}&select=*&limit=1`;
+
+  const rows = await supabaseRequest('users', query);
+
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+async function findUserById(id) {
+  if (!id) return null;
+
+  const query =
+    `id=eq.${encodeURIComponent(id)}&select=*&limit=1`;
+
+  const rows = await supabaseRequest('users', query);
+
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+async function logActivity(username, action, details = '') {
   try {
-    const created = await supabaseRequest('users', 'select=id,username', {
+    await supabaseRequest('activity', '', {
       method: 'POST',
-      returnRepresentation: true,
       body: {
-        id,
-        username: localUser.username,
-        password_hash: localUser.passwordHash,
-        role: 'user',
-        premium: !!localUser.premium,
-        premium_until: localUser.premiumUntil || null
+        username: String(username || 'غير معروف'),
+        action: String(action || ''),
+        details: String(details || '')
       }
     });
-
-    if (Array.isArray(created) && created.length) return created[0];
-  } catch (err) {
-    // Another request may have created the same username concurrently.
-    const retry = await supabaseRequest('users', usernameQuery);
-    if (Array.isArray(retry) && retry.length) return retry[0];
-    throw err;
+  } catch (error) {
+    console.error('Activity logging failed:', error.message);
   }
-
-  const retry = await supabaseRequest('users', usernameQuery);
-  if (Array.isArray(retry) && retry.length) return retry[0];
-
-  const err = new Error('تعذر تجهيز حسابك لتفعيل البريميوم.');
-  err.status = 500;
-  throw err;
 }
 
-loadDb();
-
-if (!OWNER_PASSWORD) {
-  console.warn('OWNER_PASSWORD is not set. Owner login is disabled until configured in hosting environment.');
-}
-
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'iraq-study-ai' });
-});
-
-app.get('/api/auth/me', (req, res) => {
-  res.json({ user: currentUser(req) });
-});
-
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const username = cleanUsername(req.body?.username);
-    const password = String(req.body?.password || '');
-
-    if (!validUsername(username)) {
-      return res.status(400).json({ error: 'اسم المستخدم لازم يكون بين 3 و30 حرفاً.' });
-    }
-
-    if (password.length < 8 || password.length > 72) {
-      return res.status(400).json({ error: 'كلمة المرور لازم تكون 8 أحرف على الأقل.' });
-    }
-
-    if (username.toLowerCase() === OWNER_USERNAME.toLowerCase()) {
-      return res.status(409).json({ error: 'اسم المستخدم هذا محجوز للـ Owner.' });
-    }
-
-    if (db.users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
-      return res.status(409).json({ error: 'اسم المستخدم مستخدم بالفعل. اختَر اسماً آخر.' });
-    }
-
-    const user = {
-      id: crypto.randomUUID(),
-      username,
-      passwordHash: await bcrypt.hash(password, 12),
-      role: 'user',
-      premium: false,
-      premiumUntil: null,
-      createdAt: new Date().toISOString()
-    };
-
-    db.users.push(user);
-    saveDb();
-
-    req.session.user = { username: user.username, role: 'user' };
-    logActivity(username, 'إنشاء حساب');
-
-    res.status(201).json({ user: publicUser(user) });
-  } catch (e) {
-    res.status(500).json({ error: e.message || 'تعذر إنشاء الحساب.' });
-  }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const username = cleanUsername(req.body?.username);
-    const password = String(req.body?.password || '');
-
-    if (username.toLowerCase() === OWNER_USERNAME.toLowerCase()) {
-      if (!OWNER_PASSWORD) {
-        return res.status(503).json({
-          error: 'حساب الـ Owner غير مهيّأ بعد. أضف OWNER_PASSWORD في إعدادات الخادم.'
-        });
-      }
-
-      if (password !== OWNER_PASSWORD) {
-        logActivity(username, 'محاولة دخول Owner فاشلة');
-        return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة.' });
-      }
-
-      req.session.user = { username: OWNER_USERNAME, role: 'owner' };
-      logActivity(OWNER_USERNAME, 'تسجيل دخول Owner');
-
-      return res.json({ user: publicUser({ role: 'owner' }) });
-    }
-
-    const user = db.users.find(
-      u => u.username.toLowerCase() === username.toLowerCase()
-    );
-
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      logActivity(username || 'غير معروف', 'محاولة تسجيل دخول فاشلة');
-      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة.' });
-    }
-
-    req.session.user = { username: user.username, role: 'user' };
-    logActivity(user.username, 'تسجيل دخول');
-
-    res.json({ user: publicUser(user) });
-  } catch {
-    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول.' });
-  }
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  const name = currentUser(req)?.username || 'مستخدم';
-
-  if (req.session) req.session.destroy(() => {});
-
-  logActivity(name, 'تسجيل خروج');
-  res.json({ ok: true });
-});
-
-/* Redeem a registered, unused Premium code. */
-app.post('/api/premium/redeem', requireAuth, async (req, res) => {
-  try {
-    if (req.user.role === 'owner') {
-      return res.status(400).json({
-        error: 'حساب الـ Owner لديه Premium بالفعل.'
-      });
-    }
-
-    const code = String(req.body?.code || '').trim();
-
-    if (!/^\d{6,20}$/.test(code)) {
-      return res.status(400).json({
-        error: 'اكتب كود بريميوم صحيحاً.'
-      });
-    }
-
-    const localUser = db.users.find(
-      u => u.username.toLowerCase() === req.user.username.toLowerCase()
-    );
-
-    if (!localUser) {
-      return res.status(401).json({
-        error: 'انتهت الجلسة. سجّل الدخول مرة ثانية.'
-      });
-    }
-
-    // Find the exact code in the database; its numeric range grants nothing.
-    const rows = await supabaseRequest(
-      'premium_codes',
-      `code=eq.${encodeURIComponent(code)}&select=code,duration_days,is_permanent,used_by,used_at,revoked&limit=1`
-    );
-
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({
-        error: 'الكود غير صحيح أو غير مسجّل.'
-      });
-    }
-
-    const premiumCode = rows[0];
-
-    if (premiumCode.revoked) {
-      return res.status(400).json({ error: 'هذا الكود ملغي.' });
-    }
-
-    if (premiumCode.used_by || premiumCode.used_at) {
-      return res.status(400).json({ error: 'هذا الكود مستخدم من قبل.' });
-    }
-
-    const permanent = premiumCode.is_permanent === true;
-    const days = Number(premiumCode.duration_days);
-
-    if (!permanent && (!Number.isInteger(days) || days < 1 || days > 36500)) {
-      return res.status(400).json({
-        error: 'مدة هذا الكود غير صحيحة. تواصل مع المسؤول.'
-      });
-    }
-
-    const supabaseUser = await getOrCreateSupabaseUser(localUser);
-
-    const now = Date.now();
-    const oldExpiry = localUser.premium && localUser.premiumUntil
-      ? new Date(localUser.premiumUntil).getTime()
-      : 0;
-
-    const startTime = Number.isFinite(oldExpiry) && oldExpiry > now
-      ? oldExpiry
-      : now;
-
-    const expiresAt = permanent
-      ? null
-      : new Date(startTime + days * 24 * 60 * 60 * 1000).toISOString();
-
-    /*
-     * Atomic conditional update: only one request can claim a code
-     * while used_by is still NULL and revoked is false.
-     */
-    const claimed = await supabaseRequest(
-      'premium_codes',
-      `code=eq.${encodeURIComponent(code)}&used_by=is.null&used_at=is.null&revoked=eq.false&select=code`,
-      {
-        method: 'PATCH',
-        returnRepresentation: true,
-        body: {
-          used_by: supabaseUser.id,
-          used_at: new Date().toISOString()
-        }
-      }
-    );
-
-    if (!Array.isArray(claimed) || claimed.length !== 1) {
-      return res.status(409).json({
-        error: 'هذا الكود استُخدم للتو أو لم يعد متاحاً.'
-      });
-    }
-
-    // Update the existing local account system.
-    localUser.premium = true;
-    localUser.premiumUntil = expiresAt;
-
-    try {
-      saveDb();
-    } catch (err) {
-      // Do not report successful activation if local persistence failed.
-      console.error('Local Premium save failed after code claim:', err.message);
-      return res.status(500).json({
-        error: 'تم حجز الكود، لكن تعذر حفظ التفعيل. تواصل مع المسؤول.'
-      });
-    }
-
-    // Keep the corresponding Supabase account's Premium fields in sync.
-    await supabaseRequest(
-      'users',
-      `id=eq.${encodeURIComponent(supabaseUser.id)}`,
-      {
-        method: 'PATCH',
-        body: {
-          premium: true,
-          premium_until: expiresAt
-        }
-      }
-    );
-
-    const durationText = permanent
-      ? 'دائم'
-      : days === 1
-        ? 'يوم واحد'
-        : days === 7
-          ? 'أسبوع واحد'
-          : days === 30
-            ? 'شهر واحد'
-            : days === 90
-              ? '3 أشهر'
-              : days === 180
-                ? '180 يوماً'
-                : days === 365
-                  ? 'سنة واحدة'
-                  : `${days} يوم`;
-
-    logActivity(localUser.username, 'تفعيل Premium بالكود', durationText);
-
-    return res.json({
-      success: true,
-      message: 'تم تفعيل Premium بنجاح!',
-      durationText,
-      premiumUntil: expiresAt,
-      isPermanent: permanent,
-      user: publicUser(localUser)
-    });
-  } catch (err) {
-    console.error('Premium redeem error:', err);
-    return res.status(err.status || 500).json({
-      error: err.message || 'حدث خطأ أثناء تفعيل الكود. حاول مرة أخرى.'
-    });
-  }
-});
-
-app.get('/api/admin/users', requireOwner, (_req, res) => {
-  const users = db.users.map(u => ({
-    username: u.username,
-    role: 'user',
-    premium: !!u.premium &&
-      (!u.premiumUntil || new Date(u.premiumUntil).getTime() > Date.now()),
-    premiumUntil: u.premiumUntil,
-    createdAt: u.createdAt
-  }));
-
-  if (OWNER_PASSWORD) {
-    users.unshift({
+async function currentUser(req) {
+  if (req.session?.isOwner) {
+    return {
+      id: null,
       username: OWNER_USERNAME,
       role: 'owner',
       premium: true,
       premiumUntil: null,
       createdAt: null
-    });
+    };
   }
 
-  res.json({ users });
-});
+  const userId = req.session?.userId;
 
-app.get('/api/admin/activity', requireOwner, (_req, res) => {
-  res.json({ activity: db.activity.slice(0, 100) });
-});
+  if (!userId) return null;
 
-app.post('/api/admin/premium', requireOwner, (req, res) => {
-  const username = cleanUsername(req.body?.username);
-
-  if (!username || username.toLowerCase() === OWNER_USERNAME.toLowerCase()) {
-    return res.status(400).json({
-      error: 'اكتب اسم مستخدم صحيحاً. حساب الـ Owner لديه كل الصلاحيات.'
-    });
-  }
-
-  const user = db.users.find(
-    u => u.username.toLowerCase() === username.toLowerCase()
-  );
+  const user = await findUserById(userId);
 
   if (!user) {
-    return res.status(404).json({ error: 'ما لكيت حساب بهذا الاسم.' });
+    req.session.userId = null;
+    req.session.username = null;
+    req.session.role = null;
+    return null;
   }
 
-  if (req.body?.revoke) {
-    user.premium = false;
-    user.premiumUntil = null;
-    saveDb();
-    logActivity(OWNER_USERNAME, 'سحب Premium', user.username);
-    return res.json({ message: `تم سحب Premium من ${user.username}.` });
+  const result = publicUser(user);
+
+  // تحديث حالة البريميوم إذا انتهت مدته
+  if (user.premium && !result.premium) {
+    await supabaseRequest(
+      'users',
+      `id=eq.${encodeURIComponent(user.id)}`,
+      {
+        method: 'PATCH',
+        body: {
+          premium: false,
+          premium_until: null
+        }
+      }
+    );
   }
 
-  const days = Number(req.body?.days);
+  return result;
+}
 
-  if (!Number.isInteger(days) || days < 0 || days > 3650) {
-    return res.status(400).json({ error: 'اختَر مدة صحيحة.' });
+async function requireAuth(req, res, next) {
+  try {
+    const user = await currentUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'يرجى تسجيل الدخول أولاً.'
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
   }
+}
 
-  user.premium = true;
-  user.premiumUntil = days === 0
-    ? null
-    : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+async function requireOwner(req, res, next) {
+  try {
+    const user = await currentUser(req);
 
-  saveDb();
-  logActivity(
-    OWNER_USERNAME,
-    'منح Premium',
-    `${user.username} · ${days === 0 ? 'دائم' : `${days} يوم`}`
-  );
+    if (!user || user.role !== 'owner') {
+      return res.status(403).json({
+        success: false,
+        message: 'هذه الصلاحية للمالك فقط.'
+      });
+    }
 
-  res.json({
-    message: `تم منح Premium إلى ${user.username}${days === 0 ? ' بشكل دائم' : ` لمدة ${days} يوم`}.`
-  });
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+// معلومات الحساب الحالي
+app.get('/api/auth/me', async (req, res, next) => {
+  try {
+    const user = await currentUser(req);
+
+    res.json({
+      success: true,
+      user: user || null
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-let cachedToken = null;
-let tokenExpiresAt = 0;
+// إنشاء حساب جديد
+app.post('/api/auth/register', async (req, res, next) => {
+  try {
+    const username = normalizeUsername(req.body.username);
+    const password = String(req.body.password || '');
 
-async function getAccessToken() {
-  if (cachedToken && Date.now() < tokenExpiresAt - 60000) {
-    return cachedToken;
+    if (username.length < 3 || username.length > 40) {
+      return res.status(400).json({
+        success: false,
+        message: 'اسم الحساب لازم يكون من 3 إلى 40 حرفاً.'
+      });
+    }
+
+    if (password.length < 8 || password.length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: 'كلمة المرور لازم تكون 8 أحرف على الأقل.'
+      });
+    }
+
+    if (
+      username.toLowerCase() === OWNER_USERNAME.trim().toLowerCase()
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'اسم الحساب محجوز.'
+      });
+    }
+
+    const existingUser = await findUserByUsername(username);
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'اسم الحساب مستخدم مسبقاً.'
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const created = await supabaseRequest('users', 'select=*', {
+      method: 'POST',
+      returnRepresentation: true,
+      body: {
+        username,
+        password_hash: passwordHash,
+        role: 'user',
+        premium: false,
+        premium_until: null
+      }
+    });
+
+    const user = Array.isArray(created) ? created[0] : null;
+
+    if (!user) {
+      throw new Error('لم يتم إرجاع بيانات الحساب الجديد.');
+    }
+
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.role = user.role;
+
+    await logActivity(username, 'register', 'إنشاء حساب جديد');
+
+    req.session.save((sessionError) => {
+      if (sessionError) return next(sessionError);
+
+      res.status(201).json({
+        success: true,
+        message: 'تم إنشاء الحساب بنجاح.',
+        user: publicUser(user)
+      });
+    });
+  } catch (error) {
+    if (error.status) return next(error);
+
+    if (error.message?.includes('duplicate key')) {
+      return res.status(409).json({
+        success: false,
+        message: 'اسم الحساب مستخدم مسبقاً.'
+      });
+    }
+
+    next(error);
   }
+});
 
-  if (!GIGACHAT_CREDENTIALS) {
-    const err = new Error(
-      'الذكاء الاصطناعي غير مربوط بعد. أضف GIGACHAT_CREDENTIALS في إعدادات الخادم.'
+// تسجيل الدخول
+app.post('/api/auth/login', async (req, res, next) => {
+  try {
+    const username = normalizeUsername(req.body.username);
+    const password = String(req.body.password || '');
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'اكتب اسم الحساب وكلمة المرور.'
+      });
+    }
+
+    // دخول المالك من متغيرات البيئة
+    if (
+      username.toLowerCase() === OWNER_USERNAME.trim().toLowerCase() &&
+      OWNER_PASSWORD &&
+      password === OWNER_PASSWORD
+    ) {
+      req.session.isOwner = true;
+      req.session.userId = null;
+      req.session.username = OWNER_USERNAME;
+      req.session.role = 'owner';
+
+      await logActivity(OWNER_USERNAME, 'login', 'دخول المالك');
+
+      return req.session.save((sessionError) => {
+        if (sessionError) return next(sessionError);
+
+        res.json({
+          success: true,
+          message: 'تم تسجيل دخول المالك.',
+          user: {
+            id: null,
+            username: OWNER_USERNAME,
+            role: 'owner',
+            premium: true,
+            premiumUntil: null,
+            createdAt: null
+          }
+        });
+      });
+    }
+
+    const user = await findUserByUsername(username);
+
+    if (
+      !user ||
+      !(await bcrypt.compare(password, user.password_hash))
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: 'اسم الحساب أو كلمة المرور غير صحيحة.'
+      });
+    }
+
+    req.session.isOwner = false;
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.role = user.role;
+
+    await logActivity(user.username, 'login', 'تسجيل دخول');
+
+    req.session.save((sessionError) => {
+      if (sessionError) return next(sessionError);
+
+      res.json({
+        success: true,
+        message: 'تم تسجيل الدخول بنجاح.',
+        user: publicUser(user)
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// تسجيل الخروج
+app.post('/api/auth/logout', async (req, res, next) => {
+  try {
+    const username = req.session?.username || 'غير معروف';
+
+    await logActivity(username, 'logout', 'تسجيل خروج');
+
+    req.session.destroy((error) => {
+      if (error) return next(error);
+
+      res.clearCookie('iraqstudy.sid');
+
+      res.json({
+        success: true,
+        message: 'تم تسجيل الخروج.'
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+// ===============================
+// الجزء 3: البريميوم ولوحة المالك
+// ===============================
+
+// تفعيل كود بريميوم
+app.post('/api/premium/redeem', requireAuth, async (req, res, next) => {
+  let claimedCode = null;
+
+  try {
+    if (req.user.role === 'owner') {
+      return res.json({
+        success: true,
+        message: 'حساب المالك لديه جميع الصلاحيات.',
+        durationText: 'دائم',
+        premiumUntil: null
+      });
+    }
+
+    const code = String(req.body.code || '').trim();
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: 'اكتب كود البريميوم أولاً.'
+      });
+    }
+
+    const codeRows = await supabaseRequest(
+      'premium_codes',
+      `code=eq.${encodeURIComponent(code)}&select=*&limit=1`
     );
-    err.status = 503;
-    throw err;
+
+    const premiumCode = Array.isArray(codeRows)
+      ? codeRows[0]
+      : null;
+
+    if (
+      !premiumCode ||
+      premiumCode.revoked ||
+      premiumCode.used_by
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'الكود غير صالح أو مستخدم مسبقاً.'
+      });
+    }
+
+    if (
+      !premiumCode.is_permanent &&
+      (!Number.isInteger(Number(premiumCode.duration_days)) ||
+        Number(premiumCode.duration_days) < 1)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'مدة هذا الكود غير صحيحة.'
+      });
+    }
+
+    const now = new Date();
+    const currentlyPremium =
+      req.user.premium &&
+      (!req.user.premiumUntil ||
+        new Date(req.user.premiumUntil).getTime() > now.getTime());
+
+    let premiumUntil = null;
+
+    if (!premiumCode.is_permanent) {
+      const startTime = currentlyPremium && req.user.premiumUntil
+        ? Math.max(now.getTime(), new Date(req.user.premiumUntil).getTime())
+        : now.getTime();
+
+      premiumUntil = new Date(
+        startTime + Number(premiumCode.duration_days) * 86400000
+      ).toISOString();
+    }
+
+    // حجز الكود للمستخدم الحالي حتى لا يُستخدم مرتين
+    const claimTime = new Date().toISOString();
+
+    const claimResult = await supabaseRequest(
+      'premium_codes',
+      `code=eq.${encodeURIComponent(code)}&used_by=is.null&revoked=eq.false&select=code`,
+      {
+        method: 'PATCH',
+        returnRepresentation: true,
+        body: {
+          used_by: req.user.id,
+          used_at: claimTime
+        }
+      }
+    );
+
+    if (!Array.isArray(claimResult) || claimResult.length === 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'تم استخدام الكود للتو أو لم يعد متاحاً.'
+      });
+    }
+
+    claimedCode = {
+      code,
+      userId: req.user.id,
+      claimTime
+    };
+
+    try {
+      await supabaseRequest(
+        'users',
+        `id=eq.${encodeURIComponent(req.user.id)}`,
+        {
+          method: 'PATCH',
+          body: {
+            premium: true,
+            premium_until: premiumUntil
+          }
+        }
+      );
+    } catch (error) {
+      // محاولة إعادة الكود إذا فشل تحديث حساب المستخدم
+      try {
+        await supabaseRequest(
+          'premium_codes',
+          `code=eq.${encodeURIComponent(code)}&used_by=eq.${encodeURIComponent(req.user.id)}&used_at=eq.${encodeURIComponent(claimTime)}`,
+          {
+            method: 'PATCH',
+            body: {
+              used_by: null,
+              used_at: null
+            }
+          }
+        );
+      } catch (rollbackError) {
+        console.error('Premium code rollback failed:', rollbackError.message);
+      }
+
+      claimedCode = null;
+      throw error;
+    }
+
+    await logActivity(
+      req.user.username,
+      'premium_redeem',
+      premiumCode.is_permanent
+        ? 'تفعيل بريميوم دائم'
+        : `تفعيل بريميوم لمدة ${premiumCode.duration_days} يوم`
+    );
+
+    res.json({
+      success: true,
+      message: 'تم تفعيل البريميوم بنجاح!',
+      durationText: premiumCode.is_permanent
+        ? 'دائم'
+        : `${premiumCode.duration_days} يوم`,
+      premiumUntil
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// جلب الحسابات للمالك
+app.get('/api/admin/users', requireOwner, async (req, res, next) => {
+  try {
+    const rows = await supabaseRequest(
+      'users',
+      'select=id,username,role,premium,premium_until,created_at&order=created_at.desc'
+    );
+
+    const users = [{
+      id: null,
+      username: OWNER_USERNAME,
+      role: 'owner',
+      premium: true,
+      premiumUntil: null,
+      createdAt: null
+    }];
+
+    for (const user of rows || []) {
+      users.push(publicUser(user));
+    }
+
+    res.json({
+      success: true,
+      users
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// جلب سجل النشاطات للمالك
+app.get('/api/admin/activity', requireOwner, async (req, res, next) => {
+  try {
+    const rows = await supabaseRequest(
+      'activity',
+      'select=id,username,action,details,created_at&order=created_at.desc&limit=200'
+    );
+
+    const activity = (rows || []).map((item) => ({
+      id: item.id,
+      username: item.username,
+      action: item.action,
+      details: item.details || '',
+      createdAt: item.created_at
+    }));
+
+    res.json({
+      success: true,
+      activity
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// منح البريميوم أو إلغاؤه من لوحة المالك
+app.post('/api/admin/premium', requireOwner, async (req, res, next) => {
+  try {
+    const username = normalizeUsername(req.body.username);
+    const enabled = req.body.enabled === true;
+
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'اسم الحساب مطلوب.'
+      });
+    }
+
+    if (
+      username.toLowerCase() === OWNER_USERNAME.trim().toLowerCase()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن تغيير بريميوم حساب المالك.'
+      });
+    }
+
+    const user = await findUserByUsername(username);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'الحساب غير موجود.'
+      });
+    }
+
+    await supabaseRequest(
+      'users',
+      `id=eq.${encodeURIComponent(user.id)}`,
+      {
+        method: 'PATCH',
+        body: enabled
+          ? {
+              premium: true,
+              premium_until: null
+            }
+          : {
+              premium: false,
+              premium_until: null
+            }
+      }
+    );
+
+    await logActivity(
+      OWNER_USERNAME,
+      enabled ? 'premium_granted' : 'premium_revoked',
+      `${username}: ${enabled ? 'منح بريميوم دائم' : 'إلغاء البريميوم'}`
+    );
+
+    res.json({
+      success: true,
+      message: enabled
+        ? `تم منح ${username} بريميوم دائم.`
+        : `تم إلغاء بريميوم ${username}.`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+// ===============================
+// الجزء 4: الذكاء الاصطناعي وتشغيل الموقع
+// ===============================
+
+// الحصول على رمز الوصول من GigaChat
+async function getGigaChatToken() {
+  if (!GIGACHAT_CREDENTIALS) {
+    throw new Error('إعدادات GigaChat ناقصة في إعدادات Vercel.');
   }
 
   const response = await fetch(
@@ -632,58 +732,74 @@ async function getAccessToken() {
       method: 'POST',
       headers: {
         Authorization: `Basic ${GIGACHAT_CREDENTIALS}`,
-        RqUID: crypto.randomUUID(),
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        RqUID: crypto.randomUUID()
       },
-      body: new URLSearchParams({ scope: GIGACHAT_SCOPE })
+      body: new URLSearchParams({
+        scope: GIGACHAT_SCOPE
+      })
     }
   );
 
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json();
 
   if (!response.ok || !data.access_token) {
-    console.error('GigaChat token error:', response.status, JSON.stringify(data));
-    const err = new Error(
-      'تعذر الاتصال بخدمة الذكاء الاصطناعي. تحقق من بيانات GigaChat وصلاحية الحساب.'
-    );
-    err.status = 502;
-    throw err;
+    console.error('GigaChat token error:', data);
+    throw new Error('تعذر الاتصال بخدمة GigaChat.');
   }
 
-  cachedToken = data.access_token;
-  tokenExpiresAt = Date.now() + 25 * 60 * 1000;
-
-  return cachedToken;
+  return data.access_token;
 }
 
-app.post('/api/solve', requireAuth, async (req, res) => {
+// حل السؤال باستخدام الذكاء الاصطناعي
+app.post('/api/solve', requireAuth, async (req, res, next) => {
   try {
-    const { grade, subject, page, questionNumber, task, mode } = req.body || {};
+    const question = String(req.body.question || '').trim();
+    const subject = String(req.body.subject || 'عام').trim();
+    const grade = String(req.body.grade || 'غير محدد').trim();
+    const mode = String(req.body.mode || 'solve').trim();
 
-    if (!grade || !subject || !String(task || '').trim()) {
+    if (!question) {
       return res.status(400).json({
-        error: 'اكتب الصف والمادة ونص السؤال أو الموضوع.'
+        success: false,
+        message: 'اكتب السؤال أولاً.'
       });
     }
 
-    if (String(task).length > 12000) {
-      return res.status(413).json({
-        error: 'النص طويل جداً. اختصر السؤال وحاول مرة أخرى.'
+    if (question.length > 12000) {
+      return res.status(400).json({
+        success: false,
+        message: 'السؤال طويل جداً، اختصره وحاول مجدداً.'
       });
     }
 
-    const token = await getAccessToken();
+    const isPremium = Boolean(req.user.premium) ||
+      req.user.role === 'owner';
 
-    const systemPrompt =
-      'أنت مساعد تعليمي متخصص بمساعدة الطلاب في المنهج العراقي. أجب باللغة العربية الواضحة وبأسلوب مناسب للصف. لا تخترع نصاً من كتاب أو رقم صفحة، ولا تدّعِ أنك تحققت من كتاب رسمي إذا لم يُرفق نصه. إذا كان السؤال ناقصاً، اطلب توضيحاً. للحل: اكتب الخطوات بالتسلسل ثم الجواب النهائي. للتلخيص: استخدم عناوين ونقاطاً وغطِّ الأفكار والتعاريف والقوانين المهمة. كن دقيقاً ولا تخمّن.';
+    const premiumModes = [
+      'image',
+      'simplify',
+      'summarize'
+    ];
 
-    const userPrompt =
-      `الصف: ${grade}\n` +
-      `المادة: ${subject}\n` +
-      `الصفحة: ${page || 'غير محددة'}\n` +
-      `رقم السؤال: ${questionNumber || 'غير محدد'}\n` +
-      `الطلب: ${mode === 'summary' ? 'تلخيص موضوع' : 'حل نموذجي مشروح'}\n` +
-      `نص السؤال أو الموضوع:\n${String(task).trim()}`;
+    if (premiumModes.includes(mode) && !isPremium) {
+      return res.status(403).json({
+        success: false,
+        message: 'هذه الميزة متاحة لمشتركي البريميوم فقط.',
+        premiumRequired: true
+      });
+    }
+
+    const token = await getGigaChatToken();
+
+    const modeInstructions = {
+      solve: 'حل السؤال بدقة وبخطوات واضحة وفق المنهج العراقي.',
+      image: 'حل السؤال الدراسي الظاهر في النص المرسل. إذا لم يتضمن النص السؤال، اطلب من المستخدم كتابة محتوى الصورة.',
+      simplify: 'بسّط خطوات الحل واشرح كل خطوة بلغة عربية سهلة.',
+      summarize: 'لخّص الموضوع الدراسي بنقاط منظمة مع أهم التعاريف والقوانين.'
+    };
+
+    const instruction = modeInstructions[mode] || modeInstructions.solve;
 
     const response = await fetch(
       'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
@@ -691,62 +807,88 @@ app.post('/api/solve', requireAuth, async (req, res) => {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: MODEL,
           temperature: 0.2,
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
+            {
+              role: 'system',
+              content:
+                'أنت مساعد StudyAI-Iraq، مختص بمساعدة الطلاب في المنهج العراقي. ' +
+                'أجب بالعربية الواضحة، وتحقق من الحسابات والمعلومات. ' +
+                'لا تخترع معلومات أو أرقام صفحات. إذا كانت المعطيات غير كافية، وضّح ذلك. ' +
+                'التزم بطلب المستخدم التالي: ' + instruction
+            },
+            {
+              role: 'user',
+              content:
+                `المادة: ${subject}\n` +
+                `الصف: ${grade}\n` +
+                `السؤال أو الموضوع:\n${question}`
+            }
           ]
         })
       }
     );
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json();
 
     if (!response.ok) {
-      console.error(
-        'GigaChat completion error:',
-        response.status,
-        JSON.stringify(data)
-      );
-      return res.status(502).json({
-        error: 'خدمة الذكاء الاصطناعي لم تكمل الطلب. تحقق من صلاحية الحساب واسم النموذج.'
-      });
+      console.error('GigaChat completion error:', data);
+      throw new Error('تعذر الحصول على إجابة من الذكاء الاصطناعي.');
     }
 
     const answer = data.choices?.[0]?.message?.content;
 
     if (!answer) {
-      return res.status(502).json({
-        error: 'وصل رد فارغ من خدمة الذكاء الاصطناعي. حاول مرة أخرى.'
-      });
+      throw new Error('وصل رد فارغ من الذكاء الاصطناعي.');
     }
 
-    logActivity(
+    await logActivity(
       req.user.username,
-      mode === 'summary' ? 'طلب تلخيص' : 'طلب حل',
-      `${subject} · ${grade}`
+      'solve',
+      `المادة: ${subject} | الصف: ${grade} | الوضع: ${mode}`
     );
 
-    res.json({ answer });
-  } catch (err) {
-    console.error(err);
-    res.status(err.status || 500).json({
-      error: err.message || 'حدث خطأ غير متوقع.'
+    res.json({
+      success: true,
+      answer
     });
+  } catch (error) {
+    next(error);
   }
 });
 
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// الصفحة الرئيسية والملفات الثابتة
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// التعامل مع الأخطاء
+app.use((error, req, res, next) => {
+  console.error('Server error:', error.message);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  res.status(error.status || 500).json({
+    success: false,
+    message: error.status
+      ? error.message
+      : 'حدث خطأ في الخادم. حاول مرة أخرى.'
+  });
+});
+
+// تشغيل محلي، مع التصدير لدوال Vercel
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`iraq study .ai running on port ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`StudyAI-Iraq running on port ${PORT}`);
+  });
 }
 
 module.exports = app;
